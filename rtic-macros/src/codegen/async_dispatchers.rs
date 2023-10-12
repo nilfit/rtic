@@ -54,13 +54,17 @@ pub fn codegen(app: &App, analysis: &Analysis) -> TokenStream2 {
             // let task = &app.software_tasks[name];
             // let cfgs = &task.cfgs;
 
+            let log_entry = format!("profile~begin {}, {}", name.to_string(), level);
+            let log_exit = format!("profile~end {}, {}", name.to_string(), level);
+            let log_wake = format!("profile~wake {}, {}", name.to_string(), level);
             stmts.push(quote!(
                 let exec = rtic::export::executor::AsyncTaskExecutor::#from_ptr_n_args(#name, &#exec_name);
                 exec.poll(|| {
+                    defmt::trace!(#log_wake);
                     let exec = rtic::export::executor::AsyncTaskExecutor::#from_ptr_n_args(#name, &#exec_name);
                     exec.set_pending();
                     #pend_interrupt
-                });
+                }, || defmt::trace!(#log_entry), || defmt::trace!(#log_exit));
             ));
         }
 
@@ -71,6 +75,8 @@ pub fn codegen(app: &App, analysis: &Analysis) -> TokenStream2 {
             let exit_stmts = interrupt_exit(app, analysis);
             let async_entry_stmts = async_entry(app, analysis, dispatcher_name.clone());
             let config = handler_config(app, analysis, dispatcher_name.clone());
+            let log_dispatcher_entry = format!("profile~begin {}", dispatcher_name.to_string());
+            let log_dispatcher_exit = format!("profile~end {}", dispatcher_name.to_string());
             items.push(quote!(
                 #[allow(non_snake_case)]
                 #[doc = #doc]
@@ -85,7 +91,9 @@ pub fn codegen(app: &App, analysis: &Analysis) -> TokenStream2 {
                     const PRIORITY: u8 = #level;
 
                     rtic::export::run(PRIORITY, || {
+                        defmt::trace!(#log_dispatcher_entry);
                         #(#stmts)*
+                        defmt::trace!(#log_dispatcher_exit);
                     });
 
                     #(#exit_stmts)*

@@ -182,8 +182,9 @@ impl<F: Future> AsyncTaskExecutor<F> {
 
     /// Poll the future in the executor.
     #[inline(always)]
-    pub fn poll(&self, wake: fn()) {
+    pub fn poll(&self, wake: fn(), pre: fn(), post: fn()) {
         if self.is_running() && self.check_and_clear_pending() {
+            pre();
             let waker = unsafe { Waker::from_raw(RawWaker::new(wake as *const (), &WAKER_VTABLE)) };
             let mut cx = Context::from_waker(&waker);
             let future = unsafe { Pin::new_unchecked(&mut *(self.task.get() as *mut F)) };
@@ -194,6 +195,7 @@ impl<F: Future> AsyncTaskExecutor<F> {
                 }
                 Poll::Pending => {}
             }
+            post();
         }
     }
 }
